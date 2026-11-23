@@ -1,0 +1,27 @@
+name: Daily Competitor Job Scrape
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # Runs daily at 12:00 UTC (7:00 AM EST)
+  workflow_dispatch:      # Allows manual 1-click test runs
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests beautifulsoup4
+      - run: python scraper.py
+      - name: Commit updated feed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add latest_scrape.json feed.xml
+          git commit -m "Update daily job scrape" || exit 0
+          git push
