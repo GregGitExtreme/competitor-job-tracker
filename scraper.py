@@ -18,23 +18,39 @@ def add_job(comp, jid, title, dept, loc, url):
         "url": str(url).strip()
     })
 
-# 1. Innovid (Greenhouse)
-try:
-    r = requests.get("https://boards-api.greenhouse.io/v1/boards/innovid/jobs", timeout=15).json()
-    for j in r.get("jobs", []):
-        dept = j["departments"][0]["name"] if j.get("departments") else ""
-        add_job("Innovid", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
-except Exception as e:
-    print("Innovid error:", e)
+# 1. Innovid (Greenhouse - check both innovid and innovidinc slugs)
+for slug in ["innovid", "innovidinc"]:
+    try:
+        r = requests.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", timeout=(5, 10))
+        if r.status_code == 200:
+            for j in r.json().get("jobs", []):
+                dept = j["departments"][0]["name"] if j.get("departments") else ""
+                add_job("Innovid", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
+    except Exception as e:
+        print(f"Innovid ({slug}) error:", e)
 
-# 2. Mediaocean (Greenhouse + Lever fallback)
-try:
-    r = requests.get("https://boards-api.greenhouse.io/v1/boards/mediaocean/jobs", timeout=15).json()
-    for j in r.get("jobs", []):
-        dept = j["departments"][0]["name"] if j.get("departments") else ""
-        add_job("Mediaocean", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
-except Exception as e:
-    print("Mediaocean error:", e)
+# 2. Mediaocean (Check Greenhouse, Lever, and Ashby)
+for platform, url in [
+    ("gh", "https://boards-api.greenhouse.io/v1/boards/mediaocean/jobs"),
+    ("lever", "https://api.lever.co/v0/postings/mediaocean?mode=json"),
+    ("ashby", "https://api.ashbyhq.com/posting-api/job-board/mediaocean")
+]:
+    try:
+        r = requests.get(url, timeout=(5, 10))
+        if r.status_code == 200:
+            data = r.json()
+            if platform == "gh":
+                for j in data.get("jobs", []):
+                    dept = j["departments"][0]["name"] if j.get("departments") else ""
+                    add_job("Mediaocean", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
+            elif platform == "lever":
+                for j in data:
+                    add_job("Mediaocean", j["id"], j["text"], j.get("categories", {}).get("team", ""), j.get("categories", {}).get("location", ""), j["hostedUrl"])
+            elif platform == "ashby":
+                for j in data.get("jobs", []):
+                    add_job("Mediaocean", j["id"], j["title"], j.get("department", ""), j.get("location", ""), j.get("jobUrl", ""))
+    except Exception as e:
+        print(f"Mediaocean ({platform}) error:", e)
 
 # 3. Wrapbook (Ashby)
 try:
@@ -65,10 +81,15 @@ try:
 except Exception as e:
     print("GreenSlate error:", e)
 
-# 6. Cast & Crew (Workday)
+# 6. Cast & Crew (Workday - requires Accept + User-Agent headers)
 try:
     wd_url = "https://castandcrew.wd503.myworkdayjobs.com/wday/cxs/castandcrew/CastandCrew/jobs"
-    r = requests.post(wd_url, json={"limit": 50, "offset": 0}, headers={"Content-Type": "application/json"}, timeout=15).json()
+    wd_headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    r = requests.post(wd_url, json={"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}, headers=wd_headers, timeout=(5, 10)).json()
     for j in r.get("jobPostings", []):
         path = j.get("externalPath", "")
         jid = path.split("_")[-1] if "_" in path else hashlib.md5(path.encode()).hexdigest()[:10]
