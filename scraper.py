@@ -52,14 +52,15 @@ try:
 except Exception as e:
     print("Cape.io error:", e)
 
-# 5. GreenSlate (JazzHR)
+# 5. GreenSlate (JazzHR) - ignore empty jobId nav links
 try:
-    soup = BeautifulSoup(requests.get("https://gslate.applytojob.com/apply", headers=HEADERS, timeout=15).text, "html.parser")
+    soup = BeautifulSoup(requests.get("https://gslate.applytojob.com/apply", headers=HEADERS, timeout=(5, 10)).text, "html.parser")
     for a in soup.select("a[href*='/apply/']"):
         href = a.get("href", "")
         title = a.get_text(strip=True)
-        if title and "/apply/" in href and len(href.split("/")) > 4:
-            jid = href.split("/apply/")[1].split("/")[0]
+        parts = href.split("/apply/")
+        jid = parts[1].split("/")[0] if len(parts) > 1 else ""
+        if title and jid and title.lower() != "view all jobs":
             add_job("GreenSlate", jid, title, "", "", href if href.startswith("http") else f"https://gslate.applytojob.com{href}")
 except Exception as e:
     print("GreenSlate error:", e)
@@ -86,16 +87,17 @@ try:
 except Exception as e:
     print("EP error:", e)
 
-# 8. Comcast Technology Solutions (Comcast Careers Search)
+# 8. Comcast Technology Solutions (Filter specifically for CTS & FreeWheel roles)
 try:
-    cts_url = "https://jobs.comcast.com/search-jobs/results?ActiveFacetID=0&CurrentPage=1&RecordsPerPage=50&SearchResultsModuleName=Search+Results&FacetType=0&FacetFilters%5B0%5D.ID=Comcast+Technology+Solutions&FacetFilters%5B0%5D.FacetType=3"
-    r = requests.get(cts_url, headers=HEADERS, timeout=15).json()
-    soup = BeautifulSoup(r.get("results", ""), "html.parser")
-    for a in soup.select("a[data-job-id]"):
-        jid = a.get("data-job-id")
-        title = a.select_one("h2").get_text(strip=True) if a.select_one("h2") else a.get_text(strip=True)
-        loc = a.select_one(".job-location").get_text(strip=True) if a.select_one(".job-location") else ""
-        add_job("Comcast Tech Solutions", jid, title, "", loc, f"https://jobs.comcast.com{a.get('href', '')}")
+    for kw in ["Comcast Technology Solutions", "FreeWheel"]:
+        cts_url = f"https://jobs.comcast.com/search-jobs/results?ActiveFacetID=0&CurrentPage=1&RecordsPerPage=50&Keywords={requests.utils.quote(kw)}"
+        r = requests.get(cts_url, headers=HEADERS, timeout=(5, 10)).json()
+        soup = BeautifulSoup(r.get("results", ""), "html.parser")
+        for a in soup.select("a[data-job-id]"):
+            jid = a.get("data-job-id")
+            title = a.select_one("h2").get_text(strip=True) if a.select_one("h2") else a.get_text(strip=True)
+            loc = a.select_one(".job-location").get_text(strip=True) if a.select_one(".job-location") else ""
+            add_job("Comcast Tech Solutions", jid, title, kw, loc, f"https://jobs.comcast.com{a.get('href', '')}")
 except Exception as e:
     print("CTS error:", e)
 
