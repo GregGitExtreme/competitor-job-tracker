@@ -29,28 +29,46 @@ for slug in ["innovid", "innovidinc"]:
     except Exception as e:
         print(f"Innovid ({slug}) error:", e)
 
-# 2. Mediaocean (Check Greenhouse, Lever, and Ashby)
-for platform, url in [
-    ("gh", "https://boards-api.greenhouse.io/v1/boards/mediaocean/jobs"),
-    ("lever", "https://api.lever.co/v0/postings/mediaocean?mode=json"),
-    ("ashby", "https://api.ashbyhq.com/posting-api/job-board/mediaocean")
-]:
-    try:
-        r = requests.get(url, timeout=(5, 10))
-        if r.status_code == 200:
-            data = r.json()
-            if platform == "gh":
-                for j in data.get("jobs", []):
-                    dept = j["departments"][0]["name"] if j.get("departments") else ""
-                    add_job("Mediaocean", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
-            elif platform == "lever":
-                for j in data:
-                    add_job("Mediaocean", j["id"], j["text"], j.get("categories", {}).get("team", ""), j.get("categories", {}).get("location", ""), j["hostedUrl"])
-            elif platform == "ashby":
-                for j in data.get("jobs", []):
-                    add_job("Mediaocean", j["id"], j["title"], j.get("department", ""), j.get("location", ""), j.get("jobUrl", ""))
-    except Exception as e:
-        print(f"Mediaocean ({platform}) error:", e)
+# 2. Mediaocean (SAP SuccessFactors Recruiting POST endpoint)
+try:
+    mo_url = "https://careers.mediaocean.com/services/recruiting/v1/jobs"
+    mo_headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Referer": "https://careers.mediaocean.com/search/",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    mo_payload = {
+        "locale": "en_US",
+        "pageNumber": 0,
+        "sortBy": "",
+        "keywords": "",
+        "location": "",
+        "facetFilters": {},
+        "brand": "",
+        "skills": [],
+        "categoryId": 0,
+        "alertId": "",
+        "rcmSiteLocale": "en_US"
+    }
+    r = requests.post(mo_url, json=mo_payload, headers=mo_headers, timeout=(5, 10))
+    print(f"Mediaocean status: {r.status_code}", flush=True)
+    if r.status_code == 200:
+        data = r.json()
+        # SuccessFactors nests postings inside jobSearchResult
+        results = data.get("jobSearchResult", [])
+        for item in results:
+            job = item.get("response", item)
+            jid = job.get("id", "")
+            title = job.get("unifiedStandardTitle") or job.get("title", "")
+            loc = job.get("jobLocationShort") or (job.get("location", [""])[0] if isinstance(job.get("location"), list) else "")
+            url_title = job.get("urlTitle", "job")
+            job_url = f"https://careers.mediaocean.com/job/{url_title}/{jid}-en_US/" if jid else "https://careers.mediaocean.com/search/"
+            if jid and title:
+                add_job("Mediaocean", jid, title, job.get("department", ""), loc, job_url)
+except Exception as e:
+    print("Mediaocean error:", e, flush=True)
 
 # 3. Wrapbook (Ashby)
 try:
