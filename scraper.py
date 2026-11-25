@@ -27,7 +27,6 @@ def log_error(msg):
 
 # 1. Innovid (SAP SuccessFactors Recruiting POST endpoint under Mediaocean)
 try:
-    junk=1/0
     inn_url = "https://careers.mediaocean.com/services/recruiting/v1/jobs"
     inn_headers = {
         "Accept": "application/json, text/plain, */*",
