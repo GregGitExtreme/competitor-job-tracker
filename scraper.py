@@ -18,16 +18,45 @@ def add_job(comp, jid, title, dept, loc, url):
         "url": str(url).strip()
     })
 
-# 1. Innovid (Greenhouse - check both innovid and innovidinc slugs)
-for slug in ["innovid", "innovidinc"]:
-    try:
-        r = requests.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", timeout=(5, 10))
-        if r.status_code == 200:
-            for j in r.json().get("jobs", []):
-                dept = j["departments"][0]["name"] if j.get("departments") else ""
-                add_job("Innovid", j["id"], j["title"], dept, j.get("location", {}).get("name", ""), j["absolute_url"])
-    except Exception as e:
-        print(f"Innovid ({slug}) error:", e)
+# Innovid (SAP SuccessFactors Recruiting POST endpoint under Mediaocean)
+try:
+    inn_url = "https://careers.mediaocean.com/services/recruiting/v1/jobs"
+    inn_headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Referer": "https://careers.mediaocean.com/Innovid/search/?q=&locationsearch=&searchResultView=LIST",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    inn_payload = {
+        "locale": "en_US",
+        "pageNumber": 0,
+        "sortBy": "",
+        "keywords": "",
+        "location": "",
+        "facetFilters": {},
+        "brand": "Innovid",
+        "skills": [],
+        "categoryId": 0,
+        "alertId": "",
+        "rcmSiteLocale": "en_US"
+    }
+    r = requests.post(inn_url, json=inn_payload, headers=inn_headers, timeout=(5, 10))
+    print(f"Innovid status: {r.status_code}", flush=True)
+    if r.status_code == 200:
+        data = r.json()
+        results = data.get("jobSearchResult", [])
+        for item in results:
+            job = item.get("response", item)
+            jid = job.get("id", "")
+            title = job.get("unifiedStandardTitle") or job.get("title", "")
+            loc = job.get("jobLocationShort") or (job.get("location", [""])[0] if isinstance(job.get("location"), list) else "")
+            url_title = job.get("urlTitle", "job")
+            job_url = f"https://careers.mediaocean.com/Innovid/job/{url_title}/{jid}-en_US/" if jid else "https://careers.mediaocean.com/Innovid/search/"
+            if jid and title:
+                add_job("Innovid", jid, title, job.get("department", ""), loc, job_url)
+except Exception as e:
+    print("Innovid error:", e, flush=True)
 
 # 2. Mediaocean (SAP SuccessFactors Recruiting POST endpoint)
 try:
